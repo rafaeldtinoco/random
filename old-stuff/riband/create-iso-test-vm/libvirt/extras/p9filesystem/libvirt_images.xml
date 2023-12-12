@@ -1,0 +1,4 @@
+<filesystem type='mount' accessmode='passthrough'>
+  <source dir='/var/lib/libvirt/images'/>
+  <target dir='libvirt_images'/>
+</filesystem>

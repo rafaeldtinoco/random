@@ -1,0 +1,254 @@
+config:
+  boot.autostart: "false"
+  raw.lxc: |-
+    lxc.apparmor.profile = unconfined
+    lxc.cgroup.devices.allow = a
+    lxc.cap.drop =
+    lxc.mount.auto = cgroup:rw proc:rw sys:ro
+  security.nesting: "true"
+  security.privileged: "true"
+  user.user-data: |
+    #cloud-config
+    users:
+      - name: rafaeldtinoco
+        ssh_authorized_keys:
+          - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC9Bkz8h8fhJI9C3Watz22bykuccYpKaBMrGjBt8A8zRvlYqJS+MSc+/uY6krujyBsuELhkCdO/NH5slDNfGLu9NKKdIJcwCm55NqGGfMFCbKn4OdqZFyOWDMk4kydj5ohMNGQV1lgMDdwIWVAasjVh0Td5Zbk3F966H5WssFntbgvoZcAMwpZdiQkZuc2Wbnj6CMzj+Y0hnhSJdD9JrXlKIJZuKC5ZxFElyo9wPbQPy7SUebe3Gr/rNrBTYIXxqIqORxmuxqQj4sVunkXlqKJKuPVOHg5xrB1WJ4E1tz5vWFApe2s1aWvYs/BXUHlKLa/uyJiNAn008okhgCyEY8z7
+        sudo: ['ALL=(ALL) NOPASSWD:ALL']
+        groups: [root,sudo,staff]
+        shell: /bin/bash
+    disable_root: false
+    network:
+      version: 1
+      config:
+      - type: physical
+        name: eth0
+        subnets:
+          - type: dhcp
+    proxy: http://192.168.100.250:3142/
+    http_proxy: http://192.168.100.250:3142/
+    ftp_proxy: http://192.168.100.250:3142/
+    https_proxy: http://192.168.100.250:3142/
+    runcmd:
+      - snap install --classic --edge git-ubuntu
+      - snap install --classic --edge ustriage
+      - systemctl stop unattended-upgrades
+      - systemctl stop systemd-remount-fs
+      - systemctl reset-failed
+      - passwd -d root
+      - passwd -d rafaeldtinoco
+      - echo "debconf debconf/priority select low" | sudo debconf-set-selections
+      - DEBIAN_FRONTEND=noninteractive dpkg-reconfigure debconf
+      - DEBIAN_FRONTEND=noninteractive apt-get update -y
+      - DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y
+      - DEBIAN_FRONTEND=noninteractive apt-get autoremove -y
+      - DEBIAN_FRONTEND=noninteractive apt-get autoclean -y
+      - DEBIAN_FRONTEND=noninteractive apt-get install -y openjdk-8-jdk || true
+      - systemctl disable systemd-remount-fs
+      - systemctl disable --now unattended-upgrades
+      - systemctl disable --now apt-daily-upgrade.timer
+      - systemctl disable --now apt-daily.timer
+      - systemctl disable --now accounts-daemon.service
+      - systemctl disable --now motd-news.timer
+      - systemctl disable --now irqbalance.service
+      - systemctl disable --now rsync.service
+      - systemctl disable --now ebtables.service
+      - systemctl disable --now pollinate.service
+      - systemctl disable --now ufw.service
+      - systemctl disable --now apparmor.service
+      - systemctl disable --now apport-autoreport.path
+      - systemctl disable --now apport-forward.socket
+      - systemctl disable --now iscsi.service
+      - systemctl disable --now open-iscsi.service
+      - systemctl disable --now iscsid.socket
+      - systemctl disable --now multipathd.socket
+      - systemctl disable --now multipath-tools.service
+      - systemctl disable --now multipathd.service
+      - systemctl disable --now lvm2-monitor.service
+      - systemctl disable --now lvm2-lvmpolld.socket
+      - systemctl disable --now lvm2-lvmetad.socket
+      - systemctl disable --now fstrim.timer
+      - systemctl disable --now e2scrub_all.timer
+      - systemctl disable --now e2scrub_reap.service
+      - systemctl disable --now dbus-org.freedesktop.thermald.service
+      - DEBIAN_FRONTEND=noninteractive apt-get install -y haveged || true
+    packages:
+      - man
+      - manpages
+      - hello
+      - locales
+      - less
+      - vim
+      - jq
+      - uuid
+      - bash-completion
+      - sudo
+      - rsync
+      - bridge-utils
+      - net-tools
+      - vlan
+      - ncurses-term
+      - iputils-arping
+      - iputils-ping
+      - iputils-tracepath
+      - traceroute
+      - mtr-tiny
+      - tcpdump
+      - dnsutils
+      - ssh-import-id
+      - openssh-server
+      - openssh-client
+      - software-properties-common
+      - build-essential
+      - devscripts
+      - git-buildpackage
+      - ubuntu-dev-tools
+      - linux-headers-generic
+      - gdb
+      - strace
+      - ltrace
+      - lsof
+      - xterm
+      - vim-gtk
+      - vim-nox
+      - gtk2-engines
+      - gtk2-engines-murrine
+      - gtk2-engines-pixbuf
+      - gtk3-engines-breeze
+      - gtk3-engines-unico
+      - dmz-cursor-theme
+      - gnome-icon-theme
+      - gnome-themes-standard
+      - gnome-themes-ubuntu
+      - gtk-3-examples
+      - keychain
+    power_state:
+      delay: 'now'
+      mode: reboot
+      timeout: 10
+      condition: True
+    final_message: "The system is finally up! Enjoy!"
+    write_files:
+      - path: /etc/ssh/sshd_config
+        content: |
+          Port 22
+          AddressFamily any
+          SyslogFacility AUTH
+          LogLevel INFO
+          PermitRootLogin yes
+          PubkeyAuthentication yes
+          PasswordAuthentication yes
+          ChallengeResponseAuthentication no
+          GSSAPIAuthentication no
+          HostbasedAuthentication no
+          PermitEmptyPasswords no
+          UsePAM yes
+          IgnoreUserKnownHosts yes
+          IgnoreRhosts yes
+          X11Forwarding yes
+          X11DisplayOffset 10
+          X11UseLocalhost yes
+          PermitTTY yes
+          PrintMotd no
+          TCPKeepAlive yes
+          PermitTunnel yes
+          ClientAliveInterval 5
+          Banner none
+          AcceptEnv LANG LC_* EDITOR PAGER SYSTEMD_EDITOR
+          Subsystem	sftp /usr/lib/openssh/sftp-server
+      - path: /etc/ssh/ssh_config
+        content: |
+          Host *
+            ForwardAgent no
+            ForwardX11 no
+            PasswordAuthentication yes
+            CheckHostIP no
+            AddressFamily any
+            SendEnv LANG LC_* EDITOR PAGER
+            StrictHostKeyChecking no
+            HashKnownHosts yes
+            ServerAliveInterval 5
+      - path: /etc/sudoers
+        content: |
+            Defaults env_keep += "LANG LANGUAGE LINGUAS LC_* _XKB_CHARSET"
+            Defaults env_keep += "HOME EDITOR SYSTEMD_EDITOR PAGER"
+            Defaults env_keep += "XMODIFIERS GTK_IM_MODULE QT_IM_MODULE QT_IM_SWITCHER"
+            Defaults env_keep += "HTTP_PROXY HTTPS_PROXY FTP_PROXY"
+            Defaults env_keep += "http_proxy https_proxy ftp_proxy"
+            Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            Defaults logfile=/var/log/sudo.log,loglinelen=0
+            Defaults !syslog, !pam_session
+            root ALL=(ALL) NOPASSWD: ALL
+            %wheel ALL=(ALL) NOPASSWD: ALL
+            %sudo ALL=(ALL) NOPASSWD: ALL
+            rafaeldtinoco ALL=(ALL) NOPASSWD: ALL
+    apt:
+      preserve_sources_list: false
+      primary:
+        - arches: [default]
+          uri: http://br.archive.ubuntu.com/ubuntu
+      sources_list: |
+        deb $MIRROR $RELEASE main restricted universe multiverse
+        deb $MIRROR $RELEASE-updates main restricted universe multiverse
+        deb $MIRROR $RELEASE-proposed main restricted universe multiverse
+        # deb $MIRROR $RELEASE-backports main restricted universe multiverse
+        # deb $SECURITY $RELEASE-security universe multiverse
+        deb-src $MIRROR $RELEASE main restricted universe multiverse
+        deb-src $MIRROR $RELEASE-updates main restricted universe multiverse
+        deb-src $MIRROR $RELEASE-proposed main restricted universe multiverse
+        # deb-src $MIRROR $RELEASE-backports main restricted universe multiverse
+        # deb-src $SECURITY $RELEASE-security universe multiverse
+      conf: |
+        Acquire::http::Proxy "http://192.168.100.250:3142/";
+        Dpkg::Options {
+          "--force-confdef";
+          "--force-confold";
+        };
+      sources:
+        debug.list:
+          source: |
+            # debug symbols
+            deb http://ddebs.ubuntu.com $RELEASE main restricted universe multiverse
+            deb http://ddebs.ubuntu.com $RELEASE-updates main restricted universe multiverse
+            deb http://ddebs.ubuntu.com $RELEASE-proposed main restricted universe multiverse
+          keyid: C8CAB6595FDFF622
+description: default
+devices:
+  lxdbr0:
+    nictype: bridged
+    parent: lxdbr0
+    type: nic
+  iconsdir:
+    path: /usr/share/icons
+    source: /usr/share/icons
+    type: disk
+  themesdir:
+    path: /usr/share/themes
+    source: /usr/share/themes
+    type: disk
+  fontsdir:
+    path: /usr/share/fonts
+    source: /usr/share/fonts
+    type: disk
+  etcfonts:
+    path: /etc/fonts/
+    source: /etc/fonts/
+    type: disk
+  optdir:
+    path: /opt
+    source: /opt
+    type: disk
+  homedir:
+    path: /home
+    source: /home
+    type: disk
+  root:
+    path: /
+    pool: default
+    type: disk
+  rootdir:
+    path: /root
+    source: /root
+    type: disk
+name: default
+used_by: []
+

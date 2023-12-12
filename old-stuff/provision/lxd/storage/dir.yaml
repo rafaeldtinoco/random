@@ -1,0 +1,14 @@
+config:
+  source: /var/lib/lxd/storage-pools/dir
+description: ""
+name: dir
+driver: dir
+used_by:
+- /1.0/profiles/basic
+- /1.0/profiles/cluster
+- /1.0/profiles/debian
+- /1.0/profiles/default
+- /1.0/profiles/qemu
+status: Created
+locations:
+- none

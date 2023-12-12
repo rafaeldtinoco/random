@@ -1,0 +1,44 @@
+# creating networks
+
+$ virsh net-define ./iscsi01.xml
+Network iscsi01 defined from ./iscsi01.xml
+
+$ virsh net-define ./iscsi02.xml
+Network iscsi02 defined from ./iscsi02.xml
+
+# attaching nic devices
+
+$ virsh attach-device --config <vmname> ./iscsi01-nic.xml
+Device attached successfully
+
+$ virsh attach-device --config <vmname> ./iscsi02-nic.xml
+Device attached successfully
+
+# manual start
+
+$ virsh net-start --network iscsi01
+Network iscsi01 started
+
+$ virsh net-start --network iscsi02
+Network iscsi02 started
+
+$ virsh net-start --network private01
+Network private01 started
+
+$ virsh net-start --network private02
+Network private02 started
+
+# autostart
+
+$ virsh net-autostart iscsi01
+Network iscsi01 marked as autostarted
+
+$ virsh net-autostart iscsi02
+Network iscsi02 marked as autostarted
+
+$ virsh net-autostart private01
+Network private01 marked as autostarted
+
+$ virsh net-autostart private02
+Network private02 marked as autostarted
+

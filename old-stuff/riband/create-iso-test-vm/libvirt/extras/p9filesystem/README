@@ -1,0 +1,8 @@
+$ virsh attach-device --config <vmname> ./p9-root.xml
+Device attached successfully
+
+# change "rafaeldtinoco" to your username :P
+
+$ virsh attach-device --config <vmname> ./p9-home.xml
+Device attached successfully
+

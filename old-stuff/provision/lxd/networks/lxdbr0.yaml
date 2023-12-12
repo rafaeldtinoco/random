@@ -1,0 +1,16 @@
+config:
+  ipv4.address: 10.250.97.1/24
+  ipv4.dhcp: "true"
+  ipv4.dhcp.gateway: 10.250.97.1
+  ipv4.dhcp.ranges: 10.250.97.100-10.250.97.254
+  ipv4.nat: "true"
+  ipv6.address: none
+description: ""
+name: lxdbr0
+type: bridge
+used_by:
+- /1.0/instances/arm64
+managed: true
+status: Created
+locations:
+- none

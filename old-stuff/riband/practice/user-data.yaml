@@ -1,0 +1,253 @@
+#cloud-config
+users:
+  - name: ubuntu
+    ssh_authorized_keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC9Bkz8h8fhJI9C3Watz22bykuccYpKaBMrGjBt8A8zRvlYqJS+MSc+/uY6krujyBsuELhkCdO/NH5slDNfGLu9NKKdIJcwCm55NqGGfMFCbKn4OdqZFyOWDMk4kydj5ohMNGQV1lgMDdwIWVAasjVh0Td5Zbk3F966H5WssFntbgvoZcAMwpZdiQkZuc2Wbnj6CMzj+Y0hnhSJdD9JrXlKIJZuKC5ZxFElyo9wPbQPy7SUebe3Gr/rNrBTYIXxqIqORxmuxqQj4sVunkXlqKJKuPVOHg5xrB1WJ4E1tz5vWFApe2s1aWvYs/BXUHlKLa/uyJiNAn008okhgCyEY8z7
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    groups: sudo
+    shell: /bin/bash
+
+disable_root: false
+
+network:
+  version: 1
+  config:
+  - type: physical
+    name: ens2
+    subnets:
+      - type: dhcp
+
+proxy: http://192.168.100.252:3128/
+http_proxy: http://192.168.100.252:3128/
+ftp_proxy: http://192.168.100.252:3128/
+https_proxy: http://192.168.100.252:3128/
+
+runcmd:
+  - passwd -d root
+  - passwd -d ubuntu
+  - echo "debconf debconf/priority select low" | sudo debconf-set-selections
+  - DEBIAN_FRONTEND=noninteractive dpkg-reconfigure debconf
+  - DEBIAN_FRONTEND=noninteractive apt-get update -y
+  - DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y
+
+packages:
+  - hello
+
+power_state:
+  delay: 'now'
+  mode: reboot
+  timeout: 10
+  condition: True
+
+final_message: "The system is finally up! Enjoy!"
+
+write_files:
+  - path: /etc/ssh/sshd_config
+    content: |
+      Port 22
+      AddressFamily any
+      SyslogFacility AUTH
+      LogLevel INFO
+      PermitRootLogin yes
+      PubkeyAuthentication yes
+      PasswordAuthentication yes
+      ChallengeResponseAuthentication no
+      GSSAPIAuthentication no
+      HostbasedAuthentication no
+      PermitEmptyPasswords no
+      UsePAM yes
+      IgnoreUserKnownHosts yes
+      IgnoreRhosts yes
+      X11Forwarding yes
+      X11DisplayOffset 10
+      X11UseLocalhost yes
+      PermitTTY yes
+      PrintMotd no
+      TCPKeepAlive yes
+      PermitTunnel yes
+      Banner none
+      AcceptEnv LANG LC_* EDITOR PAGER SYSTEMD_EDITOR
+      Subsystem	sftp /usr/lib/openssh/sftp-server	
+  - path: /etc/ssh/ssh_config
+    content: |
+      Host *
+        ForwardAgent no
+        ForwardX11 no
+        PasswordAuthentication yes
+        CheckHostIP no
+        AddressFamily any
+        SendEnv LANG LC_* EDITOR PAGER
+        StrictHostKeyChecking no
+        HashKnownHosts yes
+
+apt:
+  preserve_sources_list: false
+  primary:
+    - arches: [default]
+      uri: http://br.archive.ubuntu.com/ubuntu
+  security:
+    - arches: [default]
+      uri: http://security.ubuntu.com/ubuntu
+  sources_list: |
+    # binaries
+    deb $MIRROR $RELEASE main restricted universe multiverse
+    deb $MIRROR $RELEASE-updates main restricted universe multiverse
+    deb $MIRROR $RELEASE-proposed main restricted universe multiverse
+    # deb $MIRROR $RELEASE-backports main restricted universe multiverse
+    deb $SECURITY $RELEASE-security universe multiverse
+    # sources
+    deb-src $MIRROR $RELEASE main restricted universe multiverse
+    deb-src $MIRROR $RELEASE-updates main restricted universe multiverse
+    deb-src $MIRROR $RELEASE-proposed main restricted universe multiverse
+    # deb-src $MIRROR $RELEASE-backports main restricted universe multiverse
+    deb-src $SECURITY $RELEASE-security universe multiverse
+  conf: |
+    Acquire::http::Proxy "http://192.168.100.252:3128/";
+    Dpkg::Options {
+      "--force-confdef";
+      "--force-confold";
+    };
+  sources:
+    debug.list:
+      source: |
+        # debug symbols
+        deb http://ddebs.ubuntu.com $RELEASE main restricted universe multiverse
+        deb http://ddebs.ubuntu.com $RELEASE-updates main restricted universe multiverse
+        deb http://ddebs.ubuntu.com $RELEASE-proposed main restricted universe multiverse
+      key: |
+        -----BEGIN PGP PUBLIC KEY BLOCK-----
+
+        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
+        =+1J4
+        -----END PGP PUBLIC KEY BLOCK-----

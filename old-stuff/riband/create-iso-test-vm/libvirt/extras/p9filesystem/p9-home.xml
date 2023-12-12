@@ -1,0 +1,4 @@
+<filesystem type='mount' accessmode='passthrough'>
+  <source dir='/home/'/>
+  <target dir='home'/>
+</filesystem>

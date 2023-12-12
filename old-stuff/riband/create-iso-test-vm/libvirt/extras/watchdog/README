@@ -1,0 +1,3 @@
+$ virsh attach-device --config <vmname> ./watchdog.xml
+Device attached successfully
+

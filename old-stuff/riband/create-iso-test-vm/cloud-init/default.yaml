@@ -1,0 +1,218 @@
+#cloud-config
+users:
+  - name: CHANGE_USERNAME
+    ssh_authorized_keys:
+    - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC9Bkz8h8fhJI9C3Watz22bykuccYpKaBMrGjBt8A8zRvlYqJS+MSc+/uY6krujyBsuELhkCdO/NH5slDNfGLu9NKKdIJcwCm55NqGGfMFCbKn4OdqZFyOWDMk4kydj5ohMNGQV1lgMDdwIWVAasjVh0Td5Zbk3F966H5WssFntbgvoZcAMwpZdiQkZuc2Wbnj6CMzj+Y0hnhSJdD9JrXlKIJZuKC5ZxFElyo9wPbQPy7SUebe3Gr/rNrBTYIXxqIqORxmuxqQj4sVunkXlqKJKuPVOHg5xrB1WJ4E1tz5vWFApe2s1aWvYs/BXUHlKLa/uyJiNAn008okhgCyEY8z7
+    ssh_import_id: CHANGE_LAUNCHPAD_ID
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    groups: [root,sudo,staff]
+    shell: /bin/bash
+
+disable_root: false
+
+network:
+  version: 1
+  config:
+  - type: physical
+    name: eth0
+    subnets:
+      - type: dhcp
+
+runcmd:
+  - killall -9 snapd
+  - systemctl stop snapd.service
+  - systemctl stop unattended-upgrades
+  - systemctl stop systemd-remount-fs
+  - system reset-failed
+  - echo "debconf debconf/priority select low" | sudo debconf-set-selections
+  - DEBIAN_FRONTEND=noninteractive dpkg-reconfigure debconf
+  - DEBIAN_FRONTEND=noninteractive apt-get update -y
+  - DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y
+  - DEBIAN_FRONTEND=noninteractive apt-get autoremove -y
+  - DEBIAN_FRONTEND=noninteractive apt-get autoclean -y
+  - systemctl disable systemd-remount-fs
+  - systemctl disable unattended-upgrades
+  - systemctl disable apt-daily-upgrade.timer
+  - systemctl disable apt-daily.timer
+  - systemctl disable accounts-daemon.service
+  - systemctl disable motd-news.timer
+  - systemctl disable irqbalance.service
+  - systemctl disable rsync.service
+  - systemctl disable ebtables.service
+  - systemctl disable pollinate.service
+  - systemctl disable ufw.service
+  - systemctl disable apparmor.service
+  - systemctl disable apport-autoreport.path
+  - systemctl disable apport-forward.socket
+  - systemctl disable iscsi.service
+  - systemctl disable open-iscsi.service
+  - systemctl disable iscsid.socket
+  - systemctl disable multipathd.socket
+  - systemctl disable multipath-tools.service
+  - systemctl disable multipathd.service
+  - systemctl disable lvm2-monitor.service
+  - systemctl disable lvm2-lvmpolld.socket
+  - systemctl disable lvm2-lvmetad.socket
+  - passwd -d root
+  - passwd -d CHANGE_USERNAME
+
+packages:
+  - man
+  - manpages
+  - hello
+  - locales
+  - less
+  - vim
+  - jq
+  - uuid
+  - bash-completion
+  - sudo
+  - rsync
+  - bridge-utils
+  - net-tools
+  - vlan
+  - ncurses-term
+  - iputils-arping
+  - iputils-ping
+  - iputils-tracepath
+  - traceroute
+  - mtr-tiny
+  - tcpdump
+  - dnsutils
+  - ssh-import-id
+  - openssh-server
+  - openssh-client
+  - software-properties-common
+
+power_state:
+  delay: 'now'
+  mode: reboot
+  timeout: 10
+  condition: True
+
+final_message: "The system is finally up! Enjoy!"
+
+write_files:
+
+  - path: /etc/ssh/sshd_config
+    content: |
+      Port 22
+      AddressFamily any
+      SyslogFacility AUTH
+      LogLevel INFO
+      PermitRootLogin yes
+      PubkeyAuthentication yes
+      PasswordAuthentication yes
+      ChallengeResponseAuthentication no
+      GSSAPIAuthentication no
+      HostbasedAuthentication no
+      PermitEmptyPasswords no
+      UsePAM yes
+      IgnoreUserKnownHosts yes
+      IgnoreRhosts yes
+      X11Forwarding yes
+      X11DisplayOffset 10
+      X11UseLocalhost yes
+      PermitTTY yes
+      PrintMotd no
+      TCPKeepAlive yes
+      PermitTunnel yes
+      Banner none
+      AcceptEnv LANG LC_* EDITOR PAGER SYSTEMD_EDITOR
+      Subsystem	sftp /usr/lib/openssh/sftp-server
+
+  - path: /etc/ssh/ssh_config
+    content: |
+      Host *
+        ForwardAgent no
+        ForwardX11 no
+        PasswordAuthentication yes
+        CheckHostIP no
+        AddressFamily any
+        SendEnv LANG LC_* EDITOR PAGER
+        StrictHostKeyChecking no
+        HashKnownHosts yes
+
+  - path: /etc/sudoers
+    content: |
+        Defaults env_keep += "LANG LANGUAGE LINGUAS LC_* _XKB_CHARSET"
+        Defaults env_keep += "HOME EDITOR SYSTEMD_EDITOR PAGER"
+        Defaults env_keep += "XMODIFIERS GTK_IM_MODULE QT_IM_MODULE QT_IM_SWITCHER"
+        Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        Defaults logfile=/var/log/sudo.log,loglinelen=0
+        Defaults !syslog, !pam_session
+        root ALL=(ALL) NOPASSWD: ALL
+        %wheel ALL=(ALL) NOPASSWD: ALL
+        %sudo ALL=(ALL) NOPASSWD: ALL
+        CHANGE_USERNAME ALL=(ALL) NOPASSWD: ALL
+
+  - path: /etc/default/grub
+    content: |
+        GRUB_DEFAULT=0
+        GRUB_HIDDEN_TIMEOUT_QUIET=true
+        GRUB_TIMEOUT=0
+        GRUB_DISTRIBUTOR=""
+        GRUB_CMDLINE_LINUX_DEFAULT="root=/dev/vda2 console=tty0 console=ttyS0,38400n8 apparmor=0 net.ifnames=0 elevator=noop pti=off kpti=off nopcid noibrs noibpb spectre_v2=off nospec_store_bypass_disable l1tf=off"
+        GRUB_CMDLINE_LINUX="
+        GRUB_TERMINAL=serial
+        GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"
+        GRUB_DISABLE_LINUX_UUID="true"
+        GRUB_DISABLE_RECOVERY="true"
+        GRUB_DISABLE_OS_PROBER="true"
+
+  - path: /etc/modules
+    content: |
+      virtio_balloon
+      virtio_blk
+      virtio_net
+      virtio_pci
+      virtio_ring
+      virtio
+      ext4
+      9p
+      9pnet
+      9pnet_virtio
+
+  - path: /etc/initramfs-tools/modules
+    content: |
+      virtio_balloon
+      virtio_blk
+      virtio_net
+      virtio_pci
+      virtio_ring
+      virtio
+      ext4
+      9p
+      9pnet
+      9pnet_virtio
+
+apt:
+  preserve_sources_list: false
+  primary:
+    - arches: [default]
+      uri: CHANGE_REPOSITORY
+  sources_list: |
+    # binaries
+    deb $MIRROR $RELEASE main restricted universe multiverse
+    deb $MIRROR $RELEASE-updates main restricted universe multiverse
+    deb $MIRROR $RELEASE-proposed main restricted universe multiverse
+    # deb $MIRROR $RELEASE-backports main restricted universe multiverse
+    deb $SECURITY $RELEASE-security universe multiverse
+    # sources
+    deb-src $MIRROR $RELEASE main restricted universe multiverse
+    deb-src $MIRROR $RELEASE-updates main restricted universe multiverse
+    deb-src $MIRROR $RELEASE-proposed main restricted universe multiverse
+    # deb-src $MIRROR $RELEASE-backports main restricted universe multiverse
+    deb-src $SECURITY $RELEASE-security universe multiverse
+  conf: |
+    Dpkg::Options {
+      "--force-confdef";
+      "--force-confold";
+    };
+  sources:
+    debug.list:
+      source: |
+        # debug symbols
+        # deb http://ddebs.ubuntu.com $RELEASE main restricted universe multiverse
+        # deb http://ddebs.ubuntu.com $RELEASE-updates main restricted universe multiverse
+        # deb http://ddebs.ubuntu.com $RELEASE-proposed main restricted universe multiverse

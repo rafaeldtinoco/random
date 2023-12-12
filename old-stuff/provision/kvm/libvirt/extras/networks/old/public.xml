@@ -1,0 +1,9 @@
+<network>
+  <name>public</name>
+  <bridge name='virbr1' stp='on' delay='0'/>
+  <ip address='10.250.98.1' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='10.250.98.201' end='10.250.98.254'/>
+    </dhcp>
+  </ip>
+</network>

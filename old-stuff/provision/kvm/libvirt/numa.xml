@@ -1,0 +1,74 @@
+<domain type='kvm'>
+  <name>$hostname</name>
+  <uuid>$uuid</uuid>
+  <maxMemory slots='$_ramgb_double' unit='GiB'>$_ramgb_double</maxMemory>
+  <memory unit='GiB'>$ramgb</memory>
+  <currentMemory unit='GiB'>$ramgb</currentMemory>
+  <vcpu placement='static'>$vcpus</vcpu>
+  <resource>
+    <partition>/machine</partition>
+  </resource>
+  <!-- use pc for compatibility -->
+  <os>
+    <type arch='x86_64' machine='pc'>hvm</type>
+    <boot dev='hd'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+  <cpu mode='host-model' check='partial'>
+    <model fallback='allow'/>
+    <topology sockets='$vcpus' cores='1' threads='1'/>
+    <numa>
+      <cell id='0' cpus='0-$_vcpus_half_minus' memory='$_ramgb_half' unit='GiB'/>
+      <cell id='1' cpus='$_vcpus_half-$_vcpus_max' memory='$_ramgb_half' unit='GiB'/>
+    </numa>
+  </cpu>
+  <!-- clocks and timer -->
+  <clock offset='utc'>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='hpet' present='yes'/>
+  </clock>
+  <!-- actions -->
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>restart</on_crash>
+  <pm>
+    <suspend-to-mem enabled='yes'/>
+    <suspend-to-disk enabled='no'/>
+  </pm>
+  <!-- devices -->
+  <devices>
+    <!-- emulator -->
+    <emulator>$qemubin</emulator>
+    <input type='mouse' bus='ps2'/>
+    <input type='keyboard' bus='ps2'/>
+    <!-- pci + usb -->
+    <controller type='usb' index='0' model='piix3-uhci'/>
+    <controller type='pci' index='0' model='pci-root'/>
+    <!-- memory ballooning -->
+    <memballoon model='virtio'/>
+    <!-- virtio disk -->
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='$qcow2vol'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+    <!-- default network -->
+    <interface type='network'>
+      <source network='default'/>
+      <model type='virtio'/>
+    </interface>
+    <!-- serial -->
+    <serial type='pty'>
+      <target type='isa-serial' port='0'>
+        <model name='isa-serial'/>
+      </target>
+    </serial>
+    <console type='pty'>
+      <target type='serial' port='0'/>
+    </console>
+  </devices>
+</domain>

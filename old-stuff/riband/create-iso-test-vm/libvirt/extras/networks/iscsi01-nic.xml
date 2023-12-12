@@ -1,0 +1,5 @@
+<interface type='network'>
+  <source network='iscsi01'/>
+  <model type='virtio'/>
+</interface>
+

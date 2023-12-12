@@ -1,0 +1,105 @@
+apt_proxy: http://192.168.100.252:3128/
+
+apt:
+  preserve_sources_list: false
+  primary:
+    - arches: [default]
+      uri: http://br.archive.ubuntu.com/ubuntu
+  security:
+    - arches: [default]
+      uri: http://security.ubuntu.com/ubuntu
+  sources_list: |
+    # binaries
+    deb $MIRROR $RELEASE main restricted universe multiverse
+    deb $MIRROR $RELEASE-updates main restricted universe multiverse
+    deb $MIRROR $RELEASE-proposed main restricted universe multiverse
+    # deb $MIRROR $RELEASE-backports main restricted universe multiverse
+    deb $SECURITY $RELEASE-security universe multiverse
+    # sources
+    deb-src $MIRROR $RELEASE main restricted universe multiverse
+    deb-src $MIRROR $RELEASE-updates main restricted universe multiverse
+    deb-src $MIRROR $RELEASE-proposed main restricted universe multiverse
+    # deb-src $MIRROR $RELEASE-backports main restricted universe multiverse
+    deb-src $SECURITY $RELEASE-security universe multiverse
+  conf: |
+    Acquire::http::Proxy "http://192.168.100.252:3128/";
+    Dpkg::Options {
+      "--force-confdef";
+      "--force-confold";
+    };
+
+install:
+  log_file: /var/log/curtin.log
+  error_tarfile: /var/log/curtin/curtin-error-logs.tar
+  post_files:
+    - /var/log/curtin.log
+    - /var/log/syslog
+  save_install_config: /var/log/curtin-conf.yaml
+  save_install_log: /var/log/curtin-install.log
+  umount: disabled
+
+kernel:
+  package: linux-image-generic
+
+proxy:
+  http_proxy: http://192.168.100.252:3128/
+  https_proxy: http://192.168.100.252:3128/
+  no_proxy: localhost,127.0.0.1
+
+storage:
+  version: 1
+  config:
+  - id: vdb
+    type: disk
+    ptable: msdos
+    path: /dev/vdb
+    wipe: superblock
+  - id: vdb1
+    type: partition
+    size: 10MB
+    device: vdb
+  - id: vdb1_cidata
+    type: format
+    fstype: fat32
+    volume: vdb1
+    label: CIDATA
+  - id: vdb2
+    type: partition
+    size: 28GB
+    device: vdb
+  - id: vdb2_root
+    type: format
+    fstype: ext4
+    volume: vdb2
+    label: rootfs
+  - id: vdb2_mount
+    type: mount
+    path: /
+    options: "noatime,nodiratime,relatime,errors=remount-ro"
+    device: vdb2_root
+
+network:
+  version: 1
+  config:
+    - type: physical
+      name: ens2
+      subnets:
+        - type: dhcp
+
+sources:
+  05_primary:
+    uri: "https://cloud-images.ubuntu.com/releases/bionic/release/ubuntu-18.04-server-cloudimg-amd64-root.tar.xz"
+    type: "tgz"
+
+early_commands:
+  96_nopass_root: passwd -d root
+  96_nopass_ubuntu: passwd -d ubuntu
+  98_update: apt-get update
+  99_upgrade: DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade --assume-yes
+
+late_commands:
+  95_unattended_upgrades: ["curtin", "in-target", "--", "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get remove --purge unattended-upgrades -y --assume-yes"]
+  96_mount_cloudinit: ["curtin", "in-target", "--", "sh", "-c", "mount /dev/vdb1 /mnt"]
+  97_copy_user_data: cp /home/ubuntu/user-data.yaml $TARGET_MOUNT_POINT/mnt/user-data
+  98_gen_meta_data: ["curtin", "in-target", "--", "sh", "-c", "echo \"{instance-id: $(uuidgen)}\" | tee /mnt/meta-data"]
+  99_umount_cloudinit: ["curtin", "in-target", "--", "sh", "-c", "umount /mnt"]

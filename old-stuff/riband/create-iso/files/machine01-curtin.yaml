@@ -1,0 +1,81 @@
+apt:
+  preserve_sources_list: false
+  sources_list: |
+    # network: will be available to target from early stage
+    deb [trusted=yes] http://127.0.0.1/ /
+  conf: |
+    Dpkg::Options {
+      "--force-confdef";
+      "--force-confold";
+    };
+
+install:
+  log_file: /var/log/curtin.log
+  error_tarfile: /var/log/curtin/curtin-error-logs.tar
+  post_files:
+    - /var/log/curtin.log
+    - /var/log/syslog
+  save_install_config: /var/log/curtin-conf.yaml
+  save_install_log: /var/log/curtin-install.log
+  umount: disabled
+
+kernel:
+  package: linux-image-generic
+
+storage:
+  version: 1
+  config:
+  - id: vda
+    type: disk
+    ptable: msdos
+    path: /dev/vda
+    wipe: superblock
+  - id: vda1
+    type: partition
+    size: 10MB
+    device: vda
+  - id: vda1_cidata
+    type: format
+    fstype: fat32
+    volume: vda1
+    label: CIDATA
+  - id: vda2
+    type: partition
+    size: 28GB
+    device: vda
+  - id: vda2_root
+    type: format
+    fstype: ext4
+    volume: vda2
+    label: rootfs
+  - id: vda2_mount
+    type: mount
+    path: /
+    options: "noatime,nodiratime,relatime,errors=remount-ro"
+    device: vda2_root
+
+network:
+  version: 1
+  config:
+    - type: physical
+      name: ens3
+      subnets:
+        - type: dhcp
+
+sources:
+  05_primary:
+    uri: "file:///curtin/CHANGE_CLOUD_IMG_FILE"
+    type: "tgz"
+
+# early_commands:
+#  90_mount_curtin: mount -o bind /curtin/repo/ /var/www/html/
+#  91_chown_www: chown www-data:www-data /curtin/repo /var/www/html
+
+late_commands:
+  93_apt_update: ["curtin", "in-target", "--", "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get update -y"]
+  94_install_pkgs: ["curtin", "in-target", "--", "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get install -y --assume-yes xterm"]
+  95_unattended_upgrades: ["curtin", "in-target", "--", "sh", "-c", "DEBIAN_FRONTEND=noninteractive apt-get remove --purge unattended-upgrades -y --assume-yes"]
+  96_mount_cloudinit: ["curtin", "in-target", "--", "sh", "-c", "mount /dev/vda1 /mnt"]
+  97_copy_user_data: cp /curtin/machine01-cloud.yaml $TARGET_MOUNT_POINT/mnt/user-data
+  98_gen_meta_data: ["curtin", "in-target", "--", "sh", "-c", "echo \"{instance-id: $(uuidgen)}\" | tee /mnt/meta-data"]
+  99_umount_cloudinit: ["curtin", "in-target", "--", "sh", "-c", "umount /mnt"]

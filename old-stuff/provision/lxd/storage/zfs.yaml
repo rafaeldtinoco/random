@@ -1,0 +1,11 @@
+config:
+  size: 91GB
+  source: /var/lib/lxd/disks/zfs.img
+  zfs.pool_name: zfs
+description: ""
+name: zfs
+driver: zfs
+used_by: []
+status: Created
+locations:
+- none

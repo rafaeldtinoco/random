@@ -1,0 +1,15 @@
+config:
+  ipv4.address: 10.250.95.1/24
+  ipv4.dhcp: "true"
+  ipv4.dhcp.gateway: 10.250.95.1
+  ipv4.dhcp.ranges: 10.250.95.100-10.250.95.254
+  ipv4.nat: "false"
+  ipv6.address: none
+description: ""
+name: lxdint02
+type: bridge
+used_by: []
+managed: true
+status: Created
+locations:
+- none

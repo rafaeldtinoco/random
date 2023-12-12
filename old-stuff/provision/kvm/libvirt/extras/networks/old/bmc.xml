@@ -1,0 +1,10 @@
+<network>
+  <name>bmc</name>
+  <bridge name='bmc' stp='off' delay='0'/>
+  <ip address='10.250.5.1' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='10.250.5.10' end='10.250.5.254'/>
+    </dhcp>
+  </ip>
+</network>
+

@@ -1,0 +1,10 @@
+<network>
+  <name>iscsi02</name>
+  <bridge name='iscsi02' stp='off' delay='0'/>
+  <ip address='10.250.2.1' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='10.250.2.10' end='10.250.2.254'/>
+    </dhcp>
+  </ip>
+</network>
+

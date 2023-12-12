@@ -1,0 +1,5 @@
+<interface type='network'>
+  <source network='bmc'/>
+  <model type='virtio'/>
+</interface>
+

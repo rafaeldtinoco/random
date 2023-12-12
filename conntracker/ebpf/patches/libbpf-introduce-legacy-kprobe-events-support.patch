@@ -1,0 +1,465 @@
+From abc0058e2915d30c2759acda8cf268c77143ba11 Mon Sep 17 00:00:00 2001
+From: Rafael David Tinoco <rafaeldtinoco@ubuntu.com>
+Date: Tue, 23 Mar 2021 01:14:31 -0300
+Subject: [PATCH] libbpf: introduce legacy kprobe events support
+
+[PATCH v3 bpf-next][RFC] libbpf: introduce legacy kprobe events support
+
+* This is a RFC version.
+---
+ src/libbpf.c | 358 ++++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 356 insertions(+), 2 deletions(-)
+
+diff --git a/src/libbpf.c b/src/libbpf.c
+index 7aad78d..0a94e96 100644
+--- a/src/libbpf.c
++++ b/src/libbpf.c
+@@ -9644,6 +9644,10 @@ struct bpf_link {
+ 	char *pin_path;		/* NULL, if not pinned */
+ 	int fd;			/* hook FD, -1 if not applicable */
+ 	bool disconnected;
++	struct {
++		char *name;
++		bool retprobe;
++	} legacy;
+ };
+ 
+ /* Replace link's underlying BPF program with the new one */
+@@ -9680,6 +9684,9 @@ int bpf_link__destroy(struct bpf_link *link)
+ 		link->destroy(link);
+ 	if (link->pin_path)
+ 		free(link->pin_path);
++	if (link->legacy.name)
++		free(link->legacy.name);
++
+ 	free(link);
+ 
+ 	return err;
+@@ -9786,6 +9793,18 @@ static int bpf_link__detach_perf_event(struct bpf_link *link)
+ 		err = -errno;
+ 
+ 	close(link->fd);
++
++	return err;
++}
++
++static int bpf_link__detach_perf_event_legacy(struct bpf_link *link)
++{
++	int err;
++
++	err = bpf_link__detach_perf_event(link);
++	if (err)
++		err = -errno; // improve this
++
+ 	return err;
+ }
+ 
+@@ -9834,6 +9853,49 @@ struct bpf_link *bpf_program__attach_perf_event(struct bpf_program *prog,
+ 	return link;
+ }
+ 
++struct bpf_link *bpf_program__attach_perf_event_legacy(struct bpf_program *prog,
++						       int pfd)
++{
++	char errmsg[STRERR_BUFSIZE];
++	struct bpf_link *link;
++	int prog_fd, err;
++
++	if (pfd < 0) {
++		pr_warn("prog '%s': invalid perf event FD %d\n", prog->name, pfd);
++		return ERR_PTR(-EINVAL);
++	}
++	prog_fd = bpf_program__fd(prog);
++	if (prog_fd < 0) {
++		pr_warn("prog '%s': can't attach BPF program w/o FD (did you load it?)\n", prog->name);
++		return ERR_PTR(-EINVAL);
++	}
++
++	link = calloc(1, sizeof(*link));
++	if (!link)
++		return ERR_PTR(-ENOMEM);
++
++	link->detach = &bpf_link__detach_perf_event_legacy;
++	link->fd = pfd;
++
++	if (ioctl(pfd, PERF_EVENT_IOC_SET_BPF, prog_fd) < 0) {
++		err = -errno;
++		free(link);
++		pr_warn("prog '%s': failed to attach to pfd %d: %s\n", prog->name, pfd, libbpf_strerror_r(err, errmsg, sizeof(errmsg)));
++		if (err == -EPROTO)
++			pr_warn("prog '%s': try add PERF_SAMPLE_CALLCHAIN to or remove exclude_callchain_[kernel|user] from pfd %d\n", prog->name, pfd);
++		return ERR_PTR(err);
++	}
++	if (ioctl(pfd, PERF_EVENT_IOC_ENABLE, 0) < 0) {
++		err = -errno;
++		free(link);
++		pr_warn("prog '%s': failed to enable pfd %d: %s\n",
++			prog->name, pfd, libbpf_strerror_r(err, errmsg, sizeof(errmsg)));
++		return ERR_PTR(err);
++	}
++
++	return link;
++}
++
+ /*
+  * this function is expected to parse integer in the range of [0, 2^31-1] from
+  * given file using scanf format string fmt. If actual parsed value is
+@@ -9864,6 +9926,39 @@ static int parse_uint_from_file(const char *file, const char *fmt)
+ 	return ret;
+ }
+ 
++static int write_uint_to_file(const char *file, unsigned int val)
++{
++	char buf[STRERR_BUFSIZE];
++	int err;
++	FILE *f;
++
++	f = fopen(file, "w");
++	if (!f) {
++		err = -errno;
++		pr_debug("failed to open '%s': %s\n", file,
++			 libbpf_strerror_r(err, buf, sizeof(buf)));
++		return err;
++	}
++	err = fprintf(f, "%u", val);
++	if (err != 1) {
++		err = -errno;
++		pr_debug("failed to write '%u' to '%s': %s\n", val, file,
++			libbpf_strerror_r(err, buf, sizeof(buf)));
++		fclose(f);
++		return err;
++	}
++	fclose(f);
++
++	return 0;
++}
++
++static bool determine_kprobe_legacy(void)
++{
++	const char *file = "/sys/bus/event_source/devices/kprobe/type";
++
++	return access(file, 0) == 0 ? false : true;
++}
++
+ static int determine_kprobe_perf_type(void)
+ {
+ 	const char *file = "/sys/bus/event_source/devices/kprobe/type";
+@@ -9892,10 +9987,158 @@ static int determine_uprobe_retprobe_bit(void)
+ 	return parse_uint_from_file(file, "config:%d\n");
+ }
+ 
++static int toggle_kprobes_enabled(bool on)
++{
++	static bool veryfirst;
++	const char *file = "/sys/kernel/debug/kprobes/enabled";
++
++	if (on) {
++		if (veryfirst)
++			return 0;
++
++		veryfirst = true;
++		return write_uint_to_file(file, 1);
++	}
++
++	return write_uint_to_file(file, 0);
++}
++
++static int kprobe_symbol_normalize(char *newname, size_t size, const char *name)
++{
++	int ret;
++	char buf[STRERR_BUFSIZE];
++	FILE *f;
++	bool exact = false;
++	char symbol[96], sym_type, sym_name[500];
++	char *fmt = "%llx %c %499s%*[^\n]\n";
++	unsigned long long sym_addr;
++
++	memset(symbol, 0, sizeof(symbol));
++	memset(newname, 0, size);
++
++	if (IS_ERR(name))
++		return -1;
++	f = fopen("/proc/kallsyms", "r");
++	if (!f) {
++		perror("fopen");
++		exit(1);
++	}
++	while (1) {
++		ret = fscanf(f, fmt, &sym_addr, &sym_type, sym_name);
++		if (ret == EOF && feof(f))
++			break;
++		if (ret != 3) {
++			ret = -errno;
++			pr_debug("failed to read kallsyms entry: %d': %s\n", ret,
++				 libbpf_strerror_r(ret, buf, sizeof(buf)));
++			fclose(f);
++			return ret;
++		}
++		ret = strcmp(sym_name, name);
++		if (ret == 0) {
++			memcpy(symbol, name, strlen(name));
++			exact = true;
++			break;
++		}
++		memset(sym_name, 0, sizeof(sym_name));
++	}
++	rewind(f);
++	/* deal with symbol name changes due to compiler optimizations */
++	while (exact == false) {
++		ret = fscanf(f, fmt, &sym_addr, &sym_type, sym_name);
++		if (ret == EOF && feof(f))
++			break;
++		if (ret != 3) {
++			ret = -errno;
++			pr_debug("failed to read kallsyms entry: %d': %s\n", ret,
++				 libbpf_strerror_r(ret, buf, sizeof(buf)));
++			fclose(f);
++			return ret;
++		}
++		if (strstr(sym_name, name)) {
++			memcpy(symbol, sym_name, strlen(sym_name));
++			break;
++		}
++		memset(sym_name, 0, sizeof(sym_name));
++	}
++	fclose(f);
++	ret = snprintf(newname, size, "%s", symbol);
++
++	return 0;
++}
++
++static int kprobe_event_normalize(char *newname, size_t size, const char *name, bool retprobe)
++{
++	int ret;
++
++	memset(newname, 0, size);
++
++	if (retprobe)
++		ret = snprintf(newname, size, "kprobes/%s_ret", name);
++	else
++		ret = snprintf(newname, size, "kprobes/%s", name);
++
++	if (ret <= strlen("kprobes/"))
++		ret = -errno;
++
++	return ret;
++}
++
++static int poke_kprobe_events(bool add, const char *name, bool retprobe)
++{
++	int fd, ret = 0;
++	char symbolname[96], probename[32], cmd[160];
++	const char *file = "/sys/kernel/debug/tracing/kprobe_events";
++
++	ret = kprobe_event_normalize(probename, sizeof(probename), name, retprobe);
++	if (ret < 0)
++		return ret;
++
++	ret = kprobe_symbol_normalize(symbolname, sizeof(symbolname), name);
++	if (ret < 0)
++		return ret;
++
++	if (add)
++		snprintf(cmd, sizeof(cmd),"%c:%s %s", retprobe ? 'r' : 'p', probename, symbolname);
++	else
++		snprintf(cmd, sizeof(cmd), "-:%s", probename);
++
++	fd = open(file, O_WRONLY|O_APPEND, 0);
++	if (!fd)
++		return -errno;
++	ret = write(fd, cmd, strlen(cmd));
++	if (ret < 0)
++		ret = -errno;
++	close(fd);
++
++	return ret;
++}
++
++static inline int add_kprobe_event_legacy(const char* name, bool retprobe)
++{
++	return poke_kprobe_events(true, name, retprobe);
++}
++
++static inline int remove_kprobe_event_legacy(const char* name, bool retprobe)
++{
++	return poke_kprobe_events(false, name, retprobe);
++}
++
++static int determine_kprobe_perf_type_legacy(const char *func_name)
++{
++	char file[96];
++	const char *fname = "/sys/kernel/debug/tracing/events/kprobes/%s/id";
++
++	snprintf(file, sizeof(file), fname, func_name);
++
++	return parse_uint_from_file(file, "%d\n");
++}
++
+ static int perf_event_open_probe(bool uprobe, bool retprobe, const char *name,
+ 				 uint64_t offset, int pid)
+ {
+ 	struct perf_event_attr attr = {};
++	char symbolname[96];
+ 	char errmsg[STRERR_BUFSIZE];
+ 	int type, pfd, err;
+ 
+@@ -9919,10 +10162,17 @@ static int perf_event_open_probe(bool uprobe, bool retprobe, const char *name,
+ 		}
+ 		attr.config |= 1 << bit;
+ 	}
++	err = kprobe_symbol_normalize(symbolname, sizeof(symbolname), name);
++	if (err < 0) {
++		pr_warn("failed to normalize symbol %s: %s\n", name,
++			libbpf_strerror_r(err, errmsg, sizeof(errmsg)));
++		return err;
++	}
++
+ 	attr.size = sizeof(attr);
+ 	attr.type = type;
+-	attr.config1 = ptr_to_u64(name); /* kprobe_func or uprobe_path */
+-	attr.config2 = offset;		 /* kprobe_addr or probe_offset */
++	attr.config1 = ptr_to_u64(symbolname);	/* kprobe_func or uprobe_path */
++	attr.config2 = offset;			/* kprobe_addr or probe_offset */
+ 
+ 	/* pid filter is meaningful only for uprobes */
+ 	pfd = syscall(__NR_perf_event_open, &attr,
+@@ -9939,6 +10189,55 @@ static int perf_event_open_probe(bool uprobe, bool retprobe, const char *name,
+ 	return pfd;
+ }
+ 
++static int perf_event_open_probe_legacy(bool uprobe, bool retprobe, const char *name,
++					uint64_t offset, int pid)
++{
++	struct perf_event_attr attr = {};
++	char errmsg[STRERR_BUFSIZE];
++	int type, pfd, err;
++
++	if (uprobe) // legacy uprobe not supported yet
++		return -1;
++
++	err = toggle_kprobes_enabled(true);
++	if (err < 0) {
++		pr_warn("failed to toggle kprobe legacy support: %s\n",
++		libbpf_strerror_r(err, errmsg, sizeof(errmsg)));
++		return err;
++	}
++	err = add_kprobe_event_legacy(name, retprobe);
++	if (err < 0) {
++		pr_warn("failed to add legacy kprobe event: %s\n",
++		libbpf_strerror_r(err, errmsg, sizeof(errmsg)));
++		return err;
++	}
++	type = determine_kprobe_perf_type_legacy(name);
++	if (type < 0) {
++		pr_warn("failed to determine legacy kprobe event id: %s\n",
++		libbpf_strerror_r(type, errmsg, sizeof(errmsg)));
++		return type;
++	}
++
++	attr.size = sizeof(attr);
++	attr.config = type;
++	attr.type = PERF_TYPE_TRACEPOINT;
++
++	pfd = syscall(__NR_perf_event_open,
++		      &attr,
++		      pid < 0 ? -1 : pid,
++		      pid == -1 ? 0 : -1,
++		      -1,
++		      PERF_FLAG_FD_CLOEXEC);
++
++	if (pfd < 0) {
++		err = -errno;
++		pr_warn("legacy kprobe perf_event_open() failed: %s\n",
++			libbpf_strerror_r(err, errmsg, sizeof(errmsg)));
++		return err;
++	}
++	return pfd;
++}
++
+ struct bpf_link *bpf_program__attach_kprobe(struct bpf_program *prog,
+ 					    bool retprobe,
+ 					    const char *func_name)
+@@ -9967,6 +10266,37 @@ struct bpf_link *bpf_program__attach_kprobe(struct bpf_program *prog,
+ 	return link;
+ }
+ 
++struct bpf_link *bpf_program__attach_kprobe_legacy(struct bpf_program *prog,
++						   bool retprobe,
++						   const char *func_name)
++{
++	char errmsg[STRERR_BUFSIZE];
++	struct bpf_link *link;
++	int pfd, err;
++
++	pfd = perf_event_open_probe_legacy(false, retprobe, func_name, 0, -1);
++	if (pfd < 0) {
++		pr_warn("prog '%s': failed to create %s '%s' legacy perf event: %s\n",
++			prog->name, retprobe ? "kretprobe" : "kprobe",func_name,
++			libbpf_strerror_r(pfd, errmsg, sizeof(errmsg)));
++		return ERR_PTR(pfd);
++	}
++	link = bpf_program__attach_perf_event_legacy(prog, pfd);
++	if (IS_ERR(link)) {
++		close(pfd);
++		err = PTR_ERR(link);
++		pr_warn("prog '%s': failed to attach to %s '%s': %s\n",
++			prog->name, retprobe ? "kretprobe" : "kprobe", func_name,
++			libbpf_strerror_r(err, errmsg, sizeof(errmsg)));
++		return link;
++	}
++	/* needed history for the legacy probe cleanup */
++	link->legacy.name = strdup(func_name);
++	link->legacy.retprobe = retprobe;
++
++	return link;
++}
++
+ static struct bpf_link *attach_kprobe(const struct bpf_sec_def *sec,
+ 				      struct bpf_program *prog)
+ {
+@@ -9976,6 +10306,9 @@ static struct bpf_link *attach_kprobe(const struct bpf_sec_def *sec,
+ 	func_name = prog->sec_name + sec->len;
+ 	retprobe = strcmp(sec->sec, "kretprobe/") == 0;
+ 
++	if(determine_kprobe_legacy())
++		return bpf_program__attach_kprobe_legacy(prog, retprobe, func_name);
++
+ 	return bpf_program__attach_kprobe(prog, retprobe, func_name);
+ }
+ 
+@@ -11452,6 +11785,22 @@ void bpf_object__detach_skeleton(struct bpf_object_skeleton *s)
+ 
+ void bpf_object__destroy_skeleton(struct bpf_object_skeleton *s)
+ {
++	int i, j;
++	struct probeleft {
++		char *probename;
++		bool retprobe;
++	} probesleft[24];
++
++	for (i = 0, j = 0; i < s->prog_cnt; i++) {
++		struct bpf_link **link = s->progs[i].link;
++		if ((*link)->legacy.name) {
++			memset(&probesleft[j], 0, sizeof(struct probeleft));
++			probesleft[j].probename = strdup((*link)->legacy.name);
++			probesleft[j].retprobe = (*link)->legacy.retprobe;
++			j++;
++		}
++	}
++
+ 	if (s->progs)
+ 		bpf_object__detach_skeleton(s);
+ 	if (s->obj)
+@@ -11459,4 +11808,9 @@ void bpf_object__destroy_skeleton(struct bpf_object_skeleton *s)
+ 	free(s->maps);
+ 	free(s->progs);
+ 	free(s);
++
++	for (j--; j >= 0; j--) {
++		remove_kprobe_event_legacy(probesleft[j].probename, probesleft[j].retprobe);
++		free(probesleft[j].probename);
++	}
+ }
+-- 
+2.27.0
+

@@ -1,0 +1,161 @@
+--- debian.yaml	2020-05-22 02:37:05.074925297 -0300
++++ default.yaml	2020-05-25 09:57:13.113342362 -0300
+@@ -30,6 +30,7 @@
+     https_proxy: http://192.168.100.250:3142/
+     runcmd:
+       - snap install --classic --edge git-ubuntu
++      - snap install --classic --edge ustriage
+       - systemctl stop unattended-upgrades
+       - systemctl stop systemd-remount-fs
+       - systemctl reset-failed
+@@ -41,29 +42,35 @@
+       - DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y
+       - DEBIAN_FRONTEND=noninteractive apt-get autoremove -y
+       - DEBIAN_FRONTEND=noninteractive apt-get autoclean -y
++      - DEBIAN_FRONTEND=noninteractive apt-get install -y openjdk-8-jdk || true
+       - systemctl disable systemd-remount-fs
+-      - systemctl disable unattended-upgrades
+-      - systemctl disable apt-daily-upgrade.timer
+-      - systemctl disable apt-daily.timer
+-      - systemctl disable accounts-daemon.service
+-      - systemctl disable motd-news.timer
+-      - systemctl disable irqbalance.service
+-      - systemctl disable rsync.service
+-      - systemctl disable ebtables.service
+-      - systemctl disable pollinate.service
+-      - systemctl disable ufw.service
+-      - systemctl disable apparmor.service
+-      - systemctl disable apport-autoreport.path
+-      - systemctl disable apport-forward.socket
+-      - systemctl disable iscsi.service
+-      - systemctl disable open-iscsi.service
+-      - systemctl disable iscsid.socket
+-      - systemctl disable multipathd.socket
+-      - systemctl disable multipath-tools.service
+-      - systemctl disable multipathd.service
+-      - systemctl disable lvm2-monitor.service
+-      - systemctl disable lvm2-lvmpolld.socket
+-      - systemctl disable lvm2-lvmetad.socket
++      - systemctl disable --now unattended-upgrades
++      - systemctl disable --now apt-daily-upgrade.timer
++      - systemctl disable --now apt-daily.timer
++      - systemctl disable --now accounts-daemon.service
++      - systemctl disable --now motd-news.timer
++      - systemctl disable --now irqbalance.service
++      - systemctl disable --now rsync.service
++      - systemctl disable --now ebtables.service
++      - systemctl disable --now pollinate.service
++      - systemctl disable --now ufw.service
++      - systemctl disable --now apparmor.service
++      - systemctl disable --now apport-autoreport.path
++      - systemctl disable --now apport-forward.socket
++      - systemctl disable --now iscsi.service
++      - systemctl disable --now open-iscsi.service
++      - systemctl disable --now iscsid.socket
++      - systemctl disable --now multipathd.socket
++      - systemctl disable --now multipath-tools.service
++      - systemctl disable --now multipathd.service
++      - systemctl disable --now lvm2-monitor.service
++      - systemctl disable --now lvm2-lvmpolld.socket
++      - systemctl disable --now lvm2-lvmetad.socket
++      - systemctl disable --now fstrim.timer
++      - systemctl disable --now e2scrub_all.timer
++      - systemctl disable --now e2scrub_reap.service
++      - systemctl disable --now dbus-org.freedesktop.thermald.service
++      - DEBIAN_FRONTEND=noninteractive apt-get install -y haveged || true
+       - rm -rf /root/.bashrc /root/.gnupg /root/.profile /root/.ssh/
+       - cp -rfp /home/rafaeldtinoco/.ssh /root/.ssh
+       - chown -R root:root /root/.ssh
+@@ -103,13 +110,28 @@
+       - openssh-client
+       - software-properties-common
+       - build-essential
+-      - ubuntu-dev-tools
+       - devscripts
+       - git-buildpackage
++      - ubuntu-dev-tools
++      - linux-headers-generic
+       - gdb
+       - strace
+       - ltrace
+       - lsof
++      - xterm
++      - vim-gtk
++      - vim-nox
++      - gtk2-engines
++      - gtk2-engines-murrine
++      - gtk2-engines-pixbuf
++      - gtk3-engines-breeze
++      - gtk3-engines-unico
++      - dmz-cursor-theme
++      - gnome-icon-theme
++      - gnome-themes-standard
++      - gnome-themes-ubuntu
++      - gtk-3-examples
++      - keychain
+     power_state:
+       delay: 'now'
+       mode: reboot
+@@ -161,6 +183,8 @@
+             Defaults env_keep += "LANG LANGUAGE LINGUAS LC_* _XKB_CHARSET"
+             Defaults env_keep += "HOME EDITOR SYSTEMD_EDITOR PAGER"
+             Defaults env_keep += "XMODIFIERS GTK_IM_MODULE QT_IM_MODULE QT_IM_SWITCHER"
++            Defaults env_keep += "HTTP_PROXY HTTPS_PROXY FTP_PROXY"
++            Defaults env_keep += "http_proxy https_proxy ftp_proxy"
+             Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+             Defaults logfile=/var/log/sudo.log,loglinelen=0
+             Defaults !syslog, !pam_session
+@@ -172,18 +196,33 @@
+       preserve_sources_list: false
+       primary:
+         - arches: [default]
+-          uri: http://deb.debian.org/debian/
++          uri: http://br.archive.ubuntu.com/ubuntu
+       sources_list: |
+-        deb http://deb.debian.org/debian/ sid main non-free contrib
+-        deb-src http://deb.debian.org/debian/ sid main non-free contrib
+-        deb http://debug.mirrors.debian.org/debian-debug/ sid-debug main
++        deb $MIRROR $RELEASE main restricted universe multiverse
++        deb $MIRROR $RELEASE-updates main restricted universe multiverse
++        deb $MIRROR $RELEASE-proposed main restricted universe multiverse
++        # deb $MIRROR $RELEASE-backports main restricted universe multiverse
++        # deb $SECURITY $RELEASE-security universe multiverse
++        deb-src $MIRROR $RELEASE main restricted universe multiverse
++        deb-src $MIRROR $RELEASE-updates main restricted universe multiverse
++        deb-src $MIRROR $RELEASE-proposed main restricted universe multiverse
++        # deb-src $MIRROR $RELEASE-backports main restricted universe multiverse
++        # deb-src $SECURITY $RELEASE-security universe multiverse
+       conf: |
+         Acquire::http::Proxy "http://192.168.100.250:3142/";
+         Dpkg::Options {
+           "--force-confdef";
+           "--force-confold";
+         };
+-description: debian
++      sources:
++        debug.list:
++          source: |
++            # debug symbols
++            deb http://ddebs.ubuntu.com $RELEASE main restricted universe multiverse
++            deb http://ddebs.ubuntu.com $RELEASE-updates main restricted universe multiverse
++            deb http://ddebs.ubuntu.com $RELEASE-proposed main restricted universe multiverse
++          keyid: C8CAB6595FDFF622
++description: default
+ devices:
+   lxdbr0:
+     nictype: bridged
+@@ -215,12 +254,12 @@
+     type: disk
+   root:
+     path: /
+-    pool: zfs
++    pool: default
+     type: disk
+   rootdir:
+     path: /root
+     source: /root
+     type: disk
+-name: debian
++name: default
+ used_by: []
+ 

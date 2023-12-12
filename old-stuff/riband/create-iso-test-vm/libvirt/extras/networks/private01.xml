@@ -1,0 +1,10 @@
+<network>
+  <name>private01</name>
+  <bridge name='private01' stp='off' delay='0'/>
+  <ip address='10.250.3.1' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='10.250.3.10' end='10.250.3.254'/>
+    </dhcp>
+  </ip>
+</network>
+

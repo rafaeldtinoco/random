@@ -1,0 +1,6 @@
+example-c
+example
+example.bpf.o
+example.o
+output/
+vmlinux.h

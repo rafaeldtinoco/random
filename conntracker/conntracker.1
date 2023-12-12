@@ -1,0 +1,128 @@
+." Process this file with
+." groff -man -Tascii conntracker.1
+."
+.TH conntracker 1 "18 January 2021" "conntracker"
+
+.SH NAME
+.B conntracker
+- a firewall sniffer
+
+.SH SYNOPSIS
+.B conntracker
+.RB [ options ]
+
+.SH DESCRIPTION
+.B conntracker
+analyses, realtime, with low overhead, all iptables (netfilter / xtables), or nf_tables, existing flows and inform in a consumable way.
+
+.RS
+.NF
+Problems conntracker will help you solve:
+
+ - Log TCP, UDP and ICMP IPv4/IPv6 flows.
+ - Understand the network traffic in a host (or firewall);
+ - Create proper iptables (or nf_tables) rules;
+ - Blame a firewall rule for a behavior (accept/deny);
+ - Optimize firewall rules;
+.RE
+
+In order to do what conntracker does for you by hand you would have to run the
+conntrack tool picking a single, or even multiple, conntrack events. Then you
+would have to filter/sort all picked flows in a consumable way. To each picked
+flow you would have to create trace iptables rules, hoping the picked flow
+behaves similarly when you first saw the event (as you cannot do both
+simultaneously in a non automated way). At the end, you would have to tie each
+trace event with picked flows AND finish by searching, among all existing
+processes, one process containing a socket file descriptor for the picked flow
+(by looking into multiple procfs files).
+
+That is a base of what conntracker does for you behind the scenes.
+.SH OPTIONS
+.SH
+.TP
+.OP -d
+daemon mode (syslog msgs, outfile file, kill pidfile)
+
+.TP
+.OP -f
+foreground mode (stdout msgs, output file, ctrl+c, default)
+
+.TP
+.OP -t
+trace packets being tracked by netfilter
+
+.TP
+.OP -e
+trace ALL packets passing through netfilter
+
+.TP
+.OP -b
+use eBPF to catch cmdline, pids and users that originated TCP & UDP flows
+
+.TP
+.OP "-o filename | - "
+ 
+ File containing flows and traces in the following format:
+ ------------------------------------------------------------
+ PROTO [ flow # ] src = X (port=Y) to dst = W (port=Z) (F)
+     ...
+     table: A, chain: B, type: C, position: D
+     ...
+     ... [all events traced during execution for this flow]
+     ...
+ ...
+ ... [all flows observed during execution]
+ ...
+ ------------------------------------------------------------
+ X = Source Address
+ Y = Source Port Number (>=1024 is always 1024)
+ W = Destination Address
+ Z = Destination Port Number
+ F = "-" or the command that originated logged flow
+.SH OPTIONS (TRACKING TYPE)
+.SH
+.TP
+.OP "defaults"
+ a) ONLY packets from ALLOWED rules are tracked.
+ b) IPs, ports and protocols (flows) ARE LOGGED.
+ c) packets from DROPPED/REJECTED rules are NOT logged!
+
+.TP
+.OP "-t"
+trace mode:
+ a) ONLY packets from ALLOWED rules are tracked.
+ b) IPs, ports and protocols (flows) ARE LOGGED.
+ c) packets from DROPPED/REJECTED rules are NOT logged!
+ d) each flow MIGHT show chains it has passed through (traces).
+
+.TP
+.OP "-e"
+trace everything:
+ a) ONLY packets from ALLOWED rules are tracked.
+ b) IPs, ports and protocols (flows) ARE LOGGED.
+ c) -
+ d) each flow MIGHT show chains it has passed through (traces).
+ e) packets from DROPPED/REJECTED rules ARE logged!
+ f) WILL ALLOW tracking flows rejected by REJECT rules in place!
+ g) only works with -t (trace mode) enabled.
+
+.TP
+.OP "-b"
+enable eBPF:
+ h) flows MIGHT show cmdline/pid/user responsible for them.
+
+.TP
+.OP "Note: -e option is recommended if REJECT/DROP rules are in place"
+
+.SH EXIT STATUS
+.SH
+ 0 - Success
+ 1 - Error (followed by perror message)
+
+.SH COPYRIGHT
+ 2021 rafaeldtinoco. All rights reserved.
+ https://rafaeldtinoco.github.io/conntracker/
+ rafaeldtinoco@ubuntu.com
+
+.SH CREDITS
+ Thanks to Canonical and IBM.

@@ -1,0 +1,4 @@
+<filesystem type='mount' accessmode='passthrough'>
+  <source dir='/etc/libvirt/qemu'/>
+  <target dir='libvirt_etc'/>
+</filesystem>

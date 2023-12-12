@@ -1,0 +1,6 @@
+# creating directory based pool
+
+virsh pool-create-as --name default --type dir \
+    --source-host /var/lib/libvirt/images \
+    --source-path /var/lib/libvirt/images \
+    --target /var/lib/libvirt/images

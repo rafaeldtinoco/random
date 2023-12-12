@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option go_package = "github.com/rafaeldtinoco/helloworld";
+
+package helloworld;
+
+service Greeter {
+  rpc SayHello (HelloRequest) returns (HelloReply) {}
+}
+
+message HelloRequest {
+  string Name = 1;
+}
+
+message HelloReply {
+  string Message = 1;
+}

@@ -1,0 +1,81 @@
+<domain type='kvm'>
+  <name>$hostname</name>
+  <uuid>$uuid</uuid>
+  <memory unit='GiB'>$ramgb</memory>
+  <currentMemory unit='GiB'>$ramgb</currentMemory>
+  <vcpu placement='static'>$vcpus</vcpu>
+  <resource>
+    <partition>/machine</partition>
+  </resource>
+  <!-- use pc for compatibility -->
+  <os>
+    <type arch='x86_64' machine='pc'>hvm</type>
+    <boot dev='cdrom'/>
+    <boot dev='hd'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+  <cpu mode='host-passthrough' check='none'/>
+  <!-- clocks and timer -->
+  <clock offset='utc'>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='hpet' present='yes'/>
+  </clock>
+  <!-- actions -->
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>restart</on_crash>
+  <pm>
+    <suspend-to-mem enabled='no'/>
+    <suspend-to-disk enabled='no'/>
+  </pm>
+  <!-- devices -->
+  <devices>
+    <!-- emulator -->
+    <emulator>$qemubin</emulator>
+    <input type='mouse' bus='ps2'/>
+    <input type='keyboard' bus='ps2'/>
+    <!-- pci + usb -->
+    <controller type='usb' index='0' model='piix3-uhci'/>
+    <controller type='pci' index='0' model='pci-root'/>
+    <!-- memory ballooning -->
+    <memballoon model='virtio'/>
+    <!-- virtio disk -->
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='$qcow2vol'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+    <!-- cdrom -->
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='$cdromvol'/>
+      <target dev='hdc' bus='ide'/>
+      <readonly/>
+    </disk>
+    <!-- default network -->
+    <interface type='network'>
+      <source network='default'/>
+      <model type='virtio'/>
+    </interface>
+    <!-- serial -->
+    <serial type='pty'>
+      <target type='isa-serial' port='0'>
+        <model name='isa-serial'/>
+      </target>
+    </serial>
+    <console type='pty'>
+      <target type='serial' port='0'/>
+    </console>
+    <!-- graphics -->
+    <graphics type='vnc' port='-1' autoport='yes' listen='127.0.0.1' keymap='en-us'>
+      <listen type='address' address='127.0.0.1'/>
+    </graphics>
+    <video>
+      <model type='cirrus' vram='16384' heads='1' primary='yes'/>
+    </video>
+  </devices>
+</domain>

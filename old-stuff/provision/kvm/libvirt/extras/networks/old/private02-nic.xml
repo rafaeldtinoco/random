@@ -1,0 +1,5 @@
+<interface type='network'>
+  <source network='private02'/>
+  <model type='virtio'/>
+</interface>
+
