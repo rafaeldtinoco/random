@@ -382,14 +382,20 @@ check_payload_hashes() {
 }
 
 # ------------------------------------------------------------------ #
-# Check 7: /var/lib unowned executables.
+# Check 7: /var/lib unowned ELF executables created post-attack-window.
 #
 # When run as root, the malware copies itself under a generated name
-# inside /var/lib/. Any executable not tracked by pacman is suspicious.
+# inside /var/lib/. Candidate files must satisfy all three conditions:
+#   1. Executable permission bit set.
+#   2. ELF magic bytes (7f 45 4c 46) at offset 0 - eliminates SQLite
+#      databases, VM disk images, lock files, and other data files that
+#      happen to have the execute bit set.
+#   3. Modified on or after 2026-06-09 (attack window start) - reduces
+#      the set to recently created files only.
 # Requires root for reliable access to all subdirectories.
 # ------------------------------------------------------------------ #
 check_varlib_executables() {
-    _section "/var/lib unowned executables (root install path)"
+    _section "/var/lib unowned elf executables (root install path)"
 
     if [[ "${EUID}" -ne 0 ]]; then
         _warn "requires root; skipping /var/lib unowned executable scan"
@@ -400,17 +406,37 @@ check_varlib_executables() {
         return
     fi
 
+    # _is_elf returns 0 if the file starts with the ELF magic bytes.
+    _is_elf() {
+        local magic
+        magic=$(od -A n -t x1 -N 4 "$1" 2>/dev/null | tr -d ' \n')
+        [[ "$magic" == "7f454c46" ]]
+    }
+
+    # Create a reference file stamped at 2026-06-08 23:59:59 so that
+    # find -newer selects only files modified on or after 2026-06-09.
+    local reffile
+    reffile=$(mktemp)
+    touch -t 202606082359 "$reffile" 2>/dev/null || {
+        _warn "could not create reference timestamp file; skipping"
+        rm -f "$reffile"
+        return
+    }
+
     local any=0
     while IFS= read -r -d '' f; do
+        # Skip non-ELF files (db files, images, lock files, etc.).
+        _is_elf "$f" || continue
         if ! pacman -Qo "$f" &>/dev/null 2>&1; then
-            _found "unowned executable in /var/lib: $f"
+            _found "unowned elf executable in /var/lib (post-window): $f"
             any=1
         fi
-    done < <(find /var/lib -maxdepth 4 -type f \
-             -executable -print0 2>/dev/null)
+    done < <(find /var/lib -maxdepth 4 -type f -executable \
+             -newer "$reffile" -print0 2>/dev/null)
 
+    rm -f "$reffile"
     [[ "$any" -eq 0 ]] && \
-        _ok "no unowned executables found in /var/lib"
+        _ok "no unowned elf executables found in /var/lib post-attack-window"
 }
 
 # ------------------------------------------------------------------ #
